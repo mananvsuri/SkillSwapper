@@ -1,0 +1,2 @@
+# DiamondsOdoo
+Odoo Hackathon Project
