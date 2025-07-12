@@ -16,12 +16,13 @@ class User(Base):
     is_public = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
     is_banned = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    last_login = Column(DateTime(timezone=True), nullable=True)
+    # Make these optional to handle database migration issues
+    created_at = Column(DateTime, nullable=True)
+    last_login = Column(DateTime, nullable=True)
 
+    # Relationships
     skills = relationship("Skill", back_populates="user")
-    swaps_sent = relationship("Swap", back_populates="sender", foreign_keys="Swap.from_user_id")
-    swaps_received = relationship("Swap", back_populates="receiver", foreign_keys="Swap.to_user_id")
-    ratings_given = relationship("Rating", back_populates="rater", foreign_keys="Rating.from_user_id")
-    ratings_received = relationship("Rating", back_populates="ratee", foreign_keys="Rating.to_user_id")
-    swapcoins = relationship("SwapCoin", back_populates="user")
+    ratings_given = relationship("Rating", foreign_keys="Rating.from_user_id", back_populates="rater")
+    ratings_received = relationship("Rating", foreign_keys="Rating.to_user_id", back_populates="ratee")
+    swaps_sent = relationship("Swap", foreign_keys="Swap.from_user_id", back_populates="sender")
+    swaps_received = relationship("Swap", foreign_keys="Swap.to_user_id", back_populates="receiver")

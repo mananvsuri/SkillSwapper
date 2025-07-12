@@ -9,4 +9,4 @@ class SwapCoin(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     coins = Column(Integer, default=0)
 
-    user = relationship("User", back_populates="swapcoins")
+    user = relationship("User")

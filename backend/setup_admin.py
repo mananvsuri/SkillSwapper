@@ -16,26 +16,7 @@ def setup_admin():
     db = SessionLocal()
     
     try:
-        # Check if admin user already exists
-        admin_user = db.query(User).filter(User.email == "admin@gmail.com").first()
-        
-        if admin_user:
-            print("Admin user already exists, updating admin privileges...")
-            admin_user.is_admin = True
-            admin_user.is_banned = False
-        else:
-            print("Creating admin user...")
-            admin_user = User(
-                name="Admin",
-                email="admin@gmail.com",
-                password_hash=get_password_hash("Admin@1234"),
-                is_admin=True,
-                is_banned=False,
-                is_public=True
-            )
-            db.add(admin_user)
-        
-        # Update database schema if needed
+        # Update database schema first - add new columns if they don't exist
         print("Updating database schema...")
         
         # Add new columns if they don't exist
@@ -87,10 +68,36 @@ def setup_admin():
             print(f"platform_messages table might already exist: {e}")
         
         db.commit()
-        print("✅ Admin setup completed successfully!")
-        print("Admin credentials:")
-        print("Email: admin@gmail.com")
-        print("Password: Admin@1234")
+        
+        # Now check if admin user already exists
+        try:
+            admin_user = db.query(User).filter(User.email == "admin@gmail.com").first()
+            
+            if admin_user:
+                print("Admin user already exists, updating admin privileges...")
+                admin_user.is_admin = True
+                admin_user.is_banned = False
+            else:
+                print("Creating admin user...")
+                admin_user = User(
+                    name="Admin",
+                    email="admin@gmail.com",
+                    password_hash=get_password_hash("Admin@1234"),
+                    is_admin=True,
+                    is_banned=False,
+                    is_public=True
+                )
+                db.add(admin_user)
+            
+            db.commit()
+            print("✅ Admin setup completed successfully!")
+            print("Admin credentials:")
+            print("Email: admin@gmail.com")
+            print("Password: Admin@1234")
+            
+        except Exception as e:
+            print(f"❌ Error creating admin user: {e}")
+            db.rollback()
         
     except Exception as e:
         print(f"❌ Error setting up admin: {e}")

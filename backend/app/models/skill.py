@@ -27,6 +27,7 @@ class Skill(Base):
     type = Column(Enum(SkillType), nullable=False)
     level = Column(Enum(SkillLevel), nullable=False)
     status = Column(Enum(SkillStatus), default=SkillStatus.approved)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # Make this optional to handle database migration
+    created_at = Column(DateTime(timezone=True), nullable=True)
 
     user = relationship("User", back_populates="skills")

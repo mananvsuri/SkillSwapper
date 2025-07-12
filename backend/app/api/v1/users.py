@@ -87,8 +87,11 @@ class PublicUserWithSkills(BaseModel):
 
 @router.get("/public-users", response_model=List[PublicUserWithSkills])
 def get_public_users(db: Session = Depends(get_db)):
-    """Get all public users with their skills for the browse page"""
-    users = db.query(User).filter(User.is_public == True).all()
+    """Get all public users with their skills for the browse page (excluding admins)"""
+    users = db.query(User).filter(
+        User.is_public == True,
+        User.is_admin == False
+    ).all()
     
     result = []
     for user in users:

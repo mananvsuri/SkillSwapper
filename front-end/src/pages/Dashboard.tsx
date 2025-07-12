@@ -7,6 +7,7 @@ import SkillForm from '@/components/Forms/SkillForm';
 import CoinTracker from '@/components/UI/CoinTracker';
 import Badge from '@/components/UI/badge';
 import RatingModal from '@/components/Modals/RatingModal';
+import { useNavigate } from 'react-router-dom';
 
 interface UserStats {
   rating: number;
@@ -62,6 +63,13 @@ const Dashboard = () => {
   const [isCompletingSwap, setIsCompletingSwap] = useState(false);
   
   const { user, isLoadingUser } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user?.is_admin) {
+      navigate('/admin', { replace: true });
+    }
+  }, [user, navigate]);
 
   // Fetch user stats and swap coins
   useEffect(() => {
