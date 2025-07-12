@@ -8,6 +8,7 @@ class SwapStatus(str, enum.Enum):
     accepted = "accepted"
     rejected = "rejected"
     cancelled = "cancelled"
+    completed = "completed"
 
 class Swap(Base):
     __tablename__ = "swaps"

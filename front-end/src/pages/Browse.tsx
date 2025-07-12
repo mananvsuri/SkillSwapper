@@ -23,6 +23,7 @@ interface User {
   skill_wanted?: string;
   level?: string;
   is_online?: boolean;
+  availability?: string;
   skills_offered?: Skill[];
   skills_wanted?: Skill[];
 }
@@ -36,7 +37,7 @@ interface SwapRequestModalProps {
     to_user_id: number;
     skill_offered_id: number;
     skill_requested_id: number;
-  }) => void;
+  }) => Promise<{ error?: string } | null>;
 }
 
 const SwapRequestModal: React.FC<SwapRequestModalProps> = ({
@@ -48,21 +49,43 @@ const SwapRequestModal: React.FC<SwapRequestModalProps> = ({
 }) => {
   const [selectedMySkill, setSelectedMySkill] = useState<number | null>(null);
   const [selectedTargetSkill, setSelectedTargetSkill] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Only show offered skills for both users
   const myOfferedSkills = mySkills.filter((s) => s.type === 'offered');
   const targetOfferedSkills = targetUser?.skills_offered || [];
 
   const handleSendRequest = async () => {
-    console.log('Send Request clicked', selectedMySkill, selectedTargetSkill, targetUser);
+    setError(null);
     if (!selectedMySkill || !selectedTargetSkill || !targetUser) return;
-    onSendRequest({
-      to_user_id: targetUser.id,
-      skill_offered_id: selectedMySkill,
-      skill_requested_id: selectedTargetSkill,
-    });
-    onClose();
+    setIsLoading(true);
+    try {
+      const result = await onSendRequest({
+        to_user_id: targetUser.id,
+        skill_offered_id: selectedMySkill,
+        skill_requested_id: selectedTargetSkill,
+      });
+      if (result?.error) {
+        setError(result.error || 'Failed to send swap request.');
+      } else {
+        onClose();
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to send swap request.');
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedMySkill(null);
+      setSelectedTargetSkill(null);
+      setError(null);
+      setIsLoading(false);
+    }
+  }, [isOpen]);
 
   if (!isOpen || !targetUser) return null;
 
@@ -76,6 +99,7 @@ const SwapRequestModal: React.FC<SwapRequestModalProps> = ({
             className="w-full border rounded px-3 py-2"
             value={selectedMySkill ?? ''}
             onChange={(e) => setSelectedMySkill(Number(e.target.value))}
+            disabled={isLoading}
           >
             <option value="">Select a skill</option>
             {myOfferedSkills.map((skill) => (
@@ -91,6 +115,7 @@ const SwapRequestModal: React.FC<SwapRequestModalProps> = ({
             className="w-full border rounded px-3 py-2"
             value={selectedTargetSkill ?? ''}
             onChange={(e) => setSelectedTargetSkill(Number(e.target.value))}
+            disabled={isLoading}
           >
             <option value="">Select a skill</option>
             {targetOfferedSkills.map((skill) => (
@@ -100,19 +125,21 @@ const SwapRequestModal: React.FC<SwapRequestModalProps> = ({
             ))}
           </select>
         </div>
+        {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
         <div className="flex justify-end space-x-2">
           <button
             className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
             onClick={onClose}
+            disabled={isLoading}
           >
             Cancel
           </button>
           <button
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
             onClick={handleSendRequest}
-            disabled={!selectedMySkill || !selectedTargetSkill}
+            disabled={!selectedMySkill || !selectedTargetSkill || isLoading}
           >
-            Send Request
+            {isLoading ? 'Sending...' : 'Send Request'}
           </button>
         </div>
       </div>
@@ -128,6 +155,7 @@ const Browse = () => {
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [mySkills, setMySkills] = useState<Skill[]>([]);
+  const [sortBy, setSortBy] = useState<string>('availability');
   
   const { user } = useAuth();
 
@@ -162,6 +190,7 @@ const Browse = () => {
               skill_wanted: userData.skills_wanted?.map((s: any) => s.name).join(', ') || '',
               level: 'Intermediate', // Default level, will be enhanced later
               is_online: false, // Will be implemented when online status is added
+              availability: userData.availability || 'Available', // Add availability
               skills_offered: userData.skills_offered || [],
               skills_wanted: userData.skills_wanted || []
             }));
@@ -223,7 +252,87 @@ const Browse = () => {
       filtered = filtered.filter(user => user.level === filters.level);
     }
 
+    // Filter by availability
+    if (filters.availability && filters.availability !== '') {
+      filtered = filtered.filter(user => {
+        if (!user.availability) return false;
+        
+        // Exact match for predefined options
+        if (filters.availability === user.availability) return true;
+        
+        // Partial match for flexibility
+        return user.availability.toLowerCase().includes(filters.availability.toLowerCase());
+      });
+    }
+
+    // Sort the filtered results
+    filtered = sortUsers(filtered, sortBy);
+
     setFilteredUsers(filtered);
+  };
+
+  const sortUsers = (usersToSort: User[], sortType: string) => {
+    const sorted = [...usersToSort];
+    
+    switch (sortType) {
+      case 'availability':
+        // Sort by availability - users with availability first, then by availability type
+        return sorted.sort((a, b) => {
+          const aHasAvailability = a.availability && a.availability.trim() !== '' && a.availability !== 'Not Available';
+          const bHasAvailability = b.availability && b.availability.trim() !== '' && b.availability !== 'Not Available';
+          
+          // First priority: users with availability over those without
+          if (aHasAvailability && !bHasAvailability) return -1;
+          if (!aHasAvailability && bHasAvailability) return 1;
+          
+          // Second priority: if both have availability, sort by availability type
+          if (aHasAvailability && bHasAvailability) {
+            // Define priority order for availability types
+            const availabilityPriority = {
+              'Flexible': 1,
+              'Weekends & Evenings': 2,
+              'Weekdays & Evenings': 3,
+              'Weekends': 4,
+              'Weekdays': 5,
+              'Evenings': 6,
+              'Mornings': 7,
+              'Not Available': 8
+            };
+            
+            const aPriority = availabilityPriority[a.availability as keyof typeof availabilityPriority] || 9;
+            const bPriority = availabilityPriority[b.availability as keyof typeof availabilityPriority] || 9;
+            
+            if (aPriority !== bPriority) {
+              return aPriority - bPriority;
+            }
+          }
+          
+          // Third priority: sort by name if availability is the same
+          return a.name.localeCompare(b.name);
+        });
+      
+      case 'name':
+        return sorted.sort((a, b) => a.name.localeCompare(b.name));
+      
+      case 'rating':
+        return sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+      
+      case 'location':
+        return sorted.sort((a, b) => {
+          const aLoc = a.location || '';
+          const bLoc = b.location || '';
+          return aLoc.localeCompare(bLoc);
+        });
+      
+      default:
+        return sorted;
+    }
+  };
+
+  const handleSortChange = (newSortBy: string) => {
+    setSortBy(newSortBy);
+    const sorted = sortUsers(filteredUsers, newSortBy);
+    setFilteredUsers(sorted);
   };
 
   const handleRequestSwap = (userId: number) => {
@@ -239,17 +348,8 @@ const Browse = () => {
     skill_offered_id: number;
     skill_requested_id: number;
   }) => {
-    try {
-      const response = await apiClient.createSwap(swapData);
-      if (response.error) {
-        alert(`Failed to send request: ${response.error}`);
-      } else {
-        alert('Swap request sent successfully!');
-      }
-    } catch (error) {
-      console.error('Error sending swap request:', error);
-      alert('Failed to send swap request. Please try again.');
-    }
+    // Call the API and return the result for modal error handling
+    return await apiClient.createSwap(swapData);
   };
 
   if (isLoading) {
@@ -301,11 +401,15 @@ const Browse = () => {
             </p>
             <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-600">Sort by:</span>
-              <select className="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                <option>Rating (High to Low)</option>
-                <option>Distance (Near to Far)</option>
-                <option>Recently Active</option>
-                <option>Most Swaps</option>
+              <select 
+                className="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={sortBy}
+                onChange={(e) => handleSortChange(e.target.value)}
+              >
+                <option value="availability">Availability</option>
+                <option value="name">Name</option>
+                <option value="rating">Rating (High to Low)</option>
+                <option value="location">Location (Near to Far)</option>
               </select>
             </div>
           </div>
@@ -322,17 +426,7 @@ const Browse = () => {
             {filteredUsers.map((user) => (
               <UserCard
                 key={user.id}
-                user={{
-                  id: user.id.toString(),
-                  name: user.name,
-                  photo: user.photo_path,
-                  location: user.location || '',
-                  rating: user.rating || 0,
-                  skillOffered: user.skill_offered || '',
-                  skillWanted: user.skill_wanted || '',
-                  level: (user.level as 'Beginner' | 'Intermediate' | 'Pro') || 'Intermediate',
-                  isOnline: user.is_online || false
-                }}
+                user={user}
                 onRequestSwap={handleRequestSwap}
               />
             ))}

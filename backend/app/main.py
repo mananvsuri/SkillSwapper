@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.api.v1 import admin, auth, users, skills, swaps, swapcoins
 
 app = FastAPI(title="Skill Swap Platform API")
@@ -12,6 +13,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files for uploaded photos
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Register Routers
 app.include_router(auth.router, prefix="/api/v1")

@@ -7,6 +7,7 @@ interface SearchBarProps {
     location?: string;
     skillType?: 'offered' | 'wanted' | 'all';
     level?: 'Beginner' | 'Intermediate' | 'Pro' | 'all';
+    availability?: string;
   }) => void;
 }
 
@@ -16,8 +17,22 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
   const [filters, setFilters] = useState({
     location: '',
     skillType: 'all' as 'offered' | 'wanted' | 'all',
-    level: 'all' as 'Beginner' | 'Intermediate' | 'Pro' | 'all'
+    level: 'all' as 'Beginner' | 'Intermediate' | 'Pro' | 'all',
+    availability: ''
   });
+
+  // Predefined availability options
+  const availabilityOptions = [
+    { value: '', label: 'All Availability' },
+    { value: 'Weekends', label: 'Weekends' },
+    { value: 'Weekdays', label: 'Weekdays' },
+    { value: 'Evenings', label: 'Evenings' },
+    { value: 'Mornings', label: 'Mornings' },
+    { value: 'Flexible', label: 'Flexible' },
+    { value: 'Weekends & Evenings', label: 'Weekends & Evenings' },
+    { value: 'Weekdays & Evenings', label: 'Weekdays & Evenings' },
+    { value: 'Not Available', label: 'Not Available' }
+  ];
 
   const handleSearch = () => {
     onSearch(query, filters);
@@ -72,7 +87,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
       </div>
 
       {showFilters && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Location
@@ -117,6 +132,23 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
               <option value="Beginner">🟢 Beginner</option>
               <option value="Intermediate">🟡 Intermediate</option>
               <option value="Pro">🔴 Pro</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Availability
+            </label>
+            <select
+              value={filters.availability}
+              onChange={(e) => setFilters({ ...filters, availability: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {availabilityOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
         </div>

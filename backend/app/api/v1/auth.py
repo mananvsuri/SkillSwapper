@@ -5,6 +5,7 @@ from app.schemas.auth import Token
 from app.models import User
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.db.session import SessionLocal
+from datetime import datetime
 import re
 
 router = APIRouter()
@@ -127,12 +128,23 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
                 detail="Invalid email or password"
             )
         
+        # Check if user is banned
+        if user.is_banned:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="Your account has been banned. Please contact support."
+            )
+        
         # Verify password
         if not verify_password(credentials.password, user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, 
                 detail="Invalid email or password"
             )
+        
+        # Update last login
+        user.last_login = datetime.now()
+        db.commit()
         
         # Create access token
         access_token = create_access_token(data={"email": user.email})

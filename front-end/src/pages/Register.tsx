@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, User, MapPin, Upload, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { apiClient } from '@/lib/api';
 import { 
   validateEmail, 
   validateName, 
@@ -105,9 +106,26 @@ const Register = () => {
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
         location: formData.location.trim() || undefined,
-        photo_path: formData.profilePhoto ? formData.profilePhoto.name : undefined,
+        photo_path: undefined, // Will be set after upload
         is_public: true,
       };
+      
+      // If there's a photo, upload it first
+      if (formData.profilePhoto) {
+        try {
+          const uploadResponse = await apiClient.uploadProfilePhoto(formData.profilePhoto);
+          if (uploadResponse.error) {
+            alert(`Failed to upload photo: ${uploadResponse.error}`);
+            return;
+          }
+          registerData.photo_path = uploadResponse.data?.photo_path;
+        } catch (error) {
+          console.error('Error uploading photo:', error);
+          alert('Failed to upload photo. Please try again.');
+          return;
+        }
+      }
+      
       register(registerData);
     }
   };

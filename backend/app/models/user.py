@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from app.models.base import Base
 
 class User(Base):
@@ -14,6 +15,9 @@ class User(Base):
     availability = Column(String, nullable=True)
     is_public = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
+    is_banned = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_login = Column(DateTime(timezone=True), nullable=True)
 
     skills = relationship("Skill", back_populates="user")
     swaps_sent = relationship("Swap", back_populates="sender", foreign_keys="Swap.from_user_id")

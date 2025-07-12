@@ -7,6 +7,7 @@ class SwapStatus(str, Enum):
     accepted = "accepted"
     rejected = "rejected"
     cancelled = "cancelled"
+    completed = "completed"
 
 class SwapBase(BaseModel):
     from_user_id: int

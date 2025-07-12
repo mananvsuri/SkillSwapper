@@ -1,22 +1,24 @@
 
 import React from 'react';
-import { MapPin, Star, MessageCircle } from 'lucide-react';
+import { MapPin, Star, MessageCircle, Clock } from 'lucide-react';
 // import Badge from '@/components/UI/badge';
-
 
 interface UserCardProps {
   user: {
-    id: string;
+    id: number;
     name: string;
-    photo?: string;
+    photo_path?: string;
     location?: string;
     rating: number;
-    skillOffered: string;
-    skillWanted: string;
-    level: 'Beginner' | 'Intermediate' | 'Pro';
-    isOnline?: boolean;
+    skill_offered?: string;
+    skill_wanted?: string;
+    level?: string;
+    is_online?: boolean;
+    availability?: string;
+    skills_offered?: Array<{ id: number; name: string; level: string }>;
+    skills_wanted?: Array<{ id: number; name: string; level: string }>;
   };
-  onRequestSwap: (userId: string) => void;
+  onRequestSwap: (userId: number) => void;
 }
 
 const UserCard: React.FC<UserCardProps> = ({ user, onRequestSwap }) => {
@@ -26,9 +28,9 @@ const UserCard: React.FC<UserCardProps> = ({ user, onRequestSwap }) => {
         <div className="flex items-center space-x-3">
           <div className="relative">
             <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-              {user.photo ? (
+              {user.photo_path ? (
                 <img 
-                  src={user.photo} 
+                  src={user.photo_path} 
                   alt={user.name}
                   className="w-12 h-12 rounded-full object-cover"
                 />
@@ -38,7 +40,7 @@ const UserCard: React.FC<UserCardProps> = ({ user, onRequestSwap }) => {
                 </span>
               )}
             </div>
-            {user.isOnline && (
+            {user.is_online && (
               <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-400 border-2 border-white rounded-full"></div>
             )}
           </div>
@@ -57,12 +59,31 @@ const UserCard: React.FC<UserCardProps> = ({ user, onRequestSwap }) => {
       <div className="space-y-3 mb-4">
         <div className="bg-green-50 border border-green-200 rounded-lg p-3">
           <h4 className="text-sm font-medium text-green-800 mb-1">Offers</h4>
-          <p className="text-green-700">{user.skillOffered}</p>
+          <p className="text-green-700">
+            {user.skills_offered && user.skills_offered.length > 0 
+              ? user.skills_offered.map(s => s.name).join(', ')
+              : user.skill_offered || 'No skills offered'
+            }
+          </p>
         </div>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
           <h4 className="text-sm font-medium text-blue-800 mb-1">Wants</h4>
-          <p className="text-blue-700">{user.skillWanted}</p>
+          <p className="text-blue-700">
+            {user.skills_wanted && user.skills_wanted.length > 0 
+              ? user.skills_wanted.map(s => s.name).join(', ')
+              : user.skill_wanted || 'No skills wanted'
+            }
+          </p>
         </div>
+        {user.availability && (
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+            <div className="flex items-center space-x-1 mb-1">
+              <Clock size={14} className="text-purple-600" />
+              <h4 className="text-sm font-medium text-purple-800">Availability</h4>
+            </div>
+            <p className="text-purple-700 text-sm">{user.availability}</p>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between">

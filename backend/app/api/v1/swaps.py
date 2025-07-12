@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
-from app.models import Swap, SwapStatus, User, Skill
+from app.models import Swap, SwapStatus, User, Skill, Rating, SwapCoin
 from app.schemas.swap import SwapCreate, SwapResponse, SwapRequest, SwapDetailResponse
+from app.schemas.rating import RatingCreate, RatingResponse, SwapCompleteRequest
 from app.core.security import decode_access_token
 from app.db.session import SessionLocal
 
@@ -112,7 +113,7 @@ def get_my_swaps(db: Session = Depends(get_db), user=Depends(get_current_user)):
     
     return result
 
-@router.put("/swaps/{swap_id}/accept")
+@router.put("/swaps/{swap_id}/accept", response_model=SwapResponse)
 def accept_swap(swap_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     swap = db.query(Swap).filter(
         Swap.id == swap_id,
@@ -128,7 +129,119 @@ def accept_swap(swap_id: int, db: Session = Depends(get_db), user=Depends(get_cu
     
     swap.status = SwapStatus.accepted
     db.commit()
-    return {"message": "Swap accepted successfully"}
+    db.refresh(swap)
+    return swap
+
+@router.put("/swaps/{swap_id}/complete", response_model=SwapResponse)
+def complete_swap(swap_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """Complete a swap and award coins to both users"""
+    swap = db.query(Swap).filter(
+        Swap.id == swap_id,
+        (Swap.from_user_id == user.id) | (Swap.to_user_id == user.id),
+        Swap.status == SwapStatus.accepted
+    ).first()
+    
+    if not swap:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Swap not found or not in accepted status"
+        )
+    
+    # Mark swap as completed
+    swap.status = SwapStatus.completed
+    
+    # Award 5 coins to both users
+    for user_id in [swap.from_user_id, swap.to_user_id]:
+        swap_coins = db.query(SwapCoin).filter(SwapCoin.user_id == user_id).first()
+        if not swap_coins:
+            swap_coins = SwapCoin(user_id=user_id, coins=5)
+            db.add(swap_coins)
+        else:
+            swap_coins.coins += 5
+    
+    db.commit()
+    db.refresh(swap)
+    return swap
+
+@router.post("/swaps/{swap_id}/rate", response_model=RatingResponse)
+def rate_swap(swap_id: int, rating: RatingCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """Rate a completed swap"""
+    # Verify the swap exists and is completed
+    swap = db.query(Swap).filter(
+        Swap.id == swap_id,
+        Swap.status == SwapStatus.completed
+    ).first()
+    
+    if not swap:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Swap not found or not completed"
+        )
+    
+    # Verify user is part of the swap
+    if user.id not in [swap.from_user_id, swap.to_user_id]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to rate this swap"
+        )
+    
+    # Verify user is rating the other person in the swap
+    other_user_id = swap.to_user_id if user.id == swap.from_user_id else swap.from_user_id
+    if rating.to_user_id != other_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Can only rate the other person in the swap"
+        )
+    
+    # Check if user already rated this swap
+    existing_rating = db.query(Rating).filter(
+        Rating.swap_id == swap_id,
+        Rating.from_user_id == user.id
+    ).first()
+    
+    if existing_rating:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You have already rated this swap"
+        )
+    
+    # Validate stars (1-5)
+    if not 1 <= rating.stars <= 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Stars must be between 1 and 5"
+        )
+    
+    new_rating = Rating(
+        swap_id=swap_id,
+        from_user_id=user.id,
+        to_user_id=rating.to_user_id,
+        stars=rating.stars,
+        feedback=rating.feedback
+    )
+    
+    db.add(new_rating)
+    db.commit()
+    db.refresh(new_rating)
+    return new_rating
+
+@router.get("/swaps/{swap_id}/ratings", response_model=list[RatingResponse])
+def get_swap_ratings(swap_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """Get all ratings for a specific swap"""
+    # Verify the swap exists and user is part of it
+    swap = db.query(Swap).filter(
+        Swap.id == swap_id,
+        (Swap.from_user_id == user.id) | (Swap.to_user_id == user.id)
+    ).first()
+    
+    if not swap:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Swap not found or not authorized"
+        )
+    
+    ratings = db.query(Rating).filter(Rating.swap_id == swap_id).all()
+    return ratings
 
 @router.put("/swaps/{swap_id}/reject")
 def reject_swap(swap_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):

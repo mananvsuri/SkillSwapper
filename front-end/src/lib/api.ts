@@ -83,11 +83,55 @@ class ApiClient {
     return this.request('/me');
   }
 
+  async getUserStats() {
+    return this.request('/me/stats');
+  }
+
   async updateProfileVisibility(isPublic: boolean) {
     return this.request('/me/visibility', {
       method: 'PUT',
       body: JSON.stringify({ is_public: isPublic }),
     });
+  }
+
+  async updateAvailability(availability: string) {
+    return this.request('/me/availability', {
+      method: 'PUT',
+      body: JSON.stringify({ availability }),
+    });
+  }
+
+  async uploadProfilePhoto(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const token = localStorage.getItem('token');
+    const url = `${this.baseURL}/upload-photo`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return {
+          error: data.detail || 'An error occurred',
+          message: data.message,
+        };
+      }
+      
+      return { data };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'Network error',
+      };
+    }
   }
 
   // Skills endpoints
@@ -139,6 +183,27 @@ class ApiClient {
     });
   }
 
+  async completeSwap(swapId: number) {
+    return this.request(`/swaps/${swapId}/complete`, {
+      method: 'PUT',
+    });
+  }
+
+  async rateSwap(swapId: number, ratingData: {
+    to_user_id: number;
+    stars: number;
+    feedback?: string;
+  }) {
+    return this.request(`/swaps/${swapId}/rate`, {
+      method: 'POST',
+      body: JSON.stringify(ratingData),
+    });
+  }
+
+  async getSwapRatings(swapId: number) {
+    return this.request(`/swaps/${swapId}/ratings`);
+  }
+
   async deleteSwap(swapId: number) {
     return this.request(`/swaps/${swapId}`, {
       method: 'DELETE',
@@ -171,26 +236,112 @@ class ApiClient {
   }
 
   // Admin endpoints
-  async getAllUsers() {
-    return this.request('/admin/users');
+  async getAdminDashboard() {
+    return this.request('/admin/dashboard');
   }
 
-  async getAllSwaps() {
-    return this.request('/admin/swaps');
+  async getAllUsers(params?: { skip?: number; limit?: number; status?: string }) {
+    const queryParams = new URLSearchParams();
+    if (params?.skip) queryParams.append('skip', params.skip.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.status) queryParams.append('status', params.status);
+    
+    const queryString = queryParams.toString();
+    const endpoint = queryString ? `/admin/users?${queryString}` : '/admin/users';
+    return this.request(endpoint);
   }
 
-  async getAllSkills() {
-    return this.request('/admin/skills');
+  async banUser(userId: number, reason: string) {
+    return this.request('/admin/users/ban', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, reason }),
+    });
   }
 
-  async getAllRatings() {
-    return this.request('/admin/ratings');
+  async unbanUser(userId: number) {
+    return this.request('/admin/users/unban', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId }),
+    });
   }
 
-  async banUser(userId: number) {
-    return this.request(`/admin/ban/${userId}`, {
+  async getAllSkills(params?: { skip?: number; limit?: number; status?: string }) {
+    const queryParams = new URLSearchParams();
+    if (params?.skip) queryParams.append('skip', params.skip.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.status) queryParams.append('status', params.status);
+    
+    const queryString = queryParams.toString();
+    const endpoint = queryString ? `/admin/skills?${queryString}` : '/admin/skills';
+    return this.request(endpoint);
+  }
+
+  async rejectSkill(skillId: number, reason: string) {
+    return this.request('/admin/skills/reject', {
+      method: 'POST',
+      body: JSON.stringify({ skill_id: skillId, reason }),
+    });
+  }
+
+  async approveSkill(skillId: number) {
+    return this.request('/admin/skills/approve', {
+      method: 'POST',
+      body: JSON.stringify({ skill_id: skillId }),
+    });
+  }
+
+  async getAllSwaps(params?: { skip?: number; limit?: number; status?: string }) {
+    const queryParams = new URLSearchParams();
+    if (params?.skip) queryParams.append('skip', params.skip.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.status) queryParams.append('status', params.status);
+    
+    const queryString = queryParams.toString();
+    const endpoint = queryString ? `/admin/swaps?${queryString}` : '/admin/swaps';
+    return this.request(endpoint);
+  }
+
+  async createPlatformMessage(messageData: {
+    title: string;
+    message: string;
+    message_type?: string;
+  }) {
+    return this.request('/admin/messages', {
+      method: 'POST',
+      body: JSON.stringify(messageData),
+    });
+  }
+
+  async getPlatformMessages(params?: { skip?: number; limit?: number }) {
+    const queryParams = new URLSearchParams();
+    if (params?.skip) queryParams.append('skip', params.skip.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    
+    const queryString = queryParams.toString();
+    const endpoint = queryString ? `/admin/messages?${queryString}` : '/admin/messages';
+    return this.request(endpoint);
+  }
+
+  async deletePlatformMessage(messageId: number) {
+    return this.request(`/admin/messages/${messageId}`, {
       method: 'DELETE',
     });
+  }
+
+  async generateReport(reportData: {
+    report_type: string;
+    start_date?: string;
+    end_date?: string;
+    format?: string;
+  }) {
+    return this.request('/admin/reports', {
+      method: 'POST',
+      body: JSON.stringify(reportData),
+    });
+  }
+
+  async getAdminStats() {
+    return this.request('/admin/stats');
   }
 }
 
