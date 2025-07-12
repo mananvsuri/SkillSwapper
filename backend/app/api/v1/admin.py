@@ -2,10 +2,7 @@ from fastapi import Depends, HTTPException, status, Header, APIRouter
 from sqlalchemy.orm import Session
 from app.core.security import decode_access_token
 from app.db.session import SessionLocal
-from app.models.user import User
-from app.models.skill import Skill
-from app.models.swap import Swap
-from app.models.rating import Rating
+from app.models import User, Skill, Swap, Rating
 from app.schemas.user import UserResponse
 
 admin_router = APIRouter()

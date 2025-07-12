@@ -1,73 +1,203 @@
 
-import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Eye, EyeOff, MapPin, Star } from 'lucide-react';
-import Badge from '../components/UI/Badge';
-import CoinTracker from '../components/UI/CoinTracker';
-import SkillForm from '../components/Forms/SkillForm';
+import React, { useState, useEffect } from 'react';
+import { Eye, EyeOff, Edit, Plus, Trash2, MapPin, Star } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { apiClient } from '@/lib/api';
+import SkillForm from '@/components/Forms/SkillForm';
+import CoinTracker from '@/components/UI/CoinTracker';
+import Badge from '@/components/UI/badge';
+
+interface UserStats {
+  rating: number;
+  totalSwaps: number;
+  coins: number;
+}
+
+interface Skill {
+  id: number;
+  name: string;
+  type: 'offered' | 'wanted';
+  level: 'Beginner' | 'Intermediate' | 'Pro';
+  description?: string;
+  user_id: number;
+}
 
 const Dashboard = () => {
   const [showSkillForm, setShowSkillForm] = useState(false);
-  const [editingSkill, setEditingSkill] = useState<any>(null);
+  const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
   const [profileVisible, setProfileVisible] = useState(true);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [userStats, setUserStats] = useState<UserStats>({
+    rating: 0,
+    totalSwaps: 0,
+    coins: 0
+  });
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [isLoadingSkills, setIsLoadingSkills] = useState(true);
+  const [isCreatingSkill, setIsCreatingSkill] = useState(false);
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  
+  const { user, isLoadingUser } = useAuth();
 
-  // Mock user data
-  const user = {
-    name: "John Doe",
-    email: "john@example.com",
-    location: "New York, NY",
-    photo: null,
-    rating: 4.8,
-    totalSwaps: 12,
-    coins: 150
-  };
-
-  const [skills, setSkills] = useState([
-    {
-      id: '1',
-      name: 'Photoshop',
-      type: 'offered' as const,
-      level: 'Pro' as const,
-      description: 'Advanced photo editing and design'
-    },
-    {
-      id: '2',
-      name: 'Excel',
-      type: 'wanted' as const,
-      level: 'Beginner' as const,
-      description: 'Want to learn advanced formulas'
-    },
-    {
-      id: '3',
-      name: 'Guitar',
-      type: 'offered' as const,
-      level: 'Intermediate' as const,
-      description: 'Acoustic guitar lessons'
-    }
-  ]);
-
-  const handleAddSkill = (skillData: any) => {
-    const newSkill = {
-      ...skillData,
-      id: Date.now().toString()
+  // Fetch user stats and swap coins
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      if (!user) return;
+      
+      try {
+        setIsLoadingStats(true);
+        
+        // Fetch user coins
+        const coinsResponse = await apiClient.getUserCoins();
+        if (coinsResponse.error) {
+          console.error('Error fetching coins:', coinsResponse.error);
+        }
+        
+        // For now, we'll use basic stats since the backend doesn't have rating/swaps endpoints yet
+        const mockStats: UserStats = {
+          rating: 0, // Will be calculated from actual ratings when that endpoint is added
+          totalSwaps: 0, // Will be fetched from swaps endpoint when that's implemented
+          coins: coinsResponse.data?.coins || 0
+        };
+        
+        setUserStats(mockStats);
+      } catch (error) {
+        console.error('Error fetching user stats:', error);
+      } finally {
+        setIsLoadingStats(false);
+      }
     };
-    setSkills([...skills, newSkill]);
-    setShowSkillForm(false);
+
+    fetchUserStats();
+  }, [user]);
+
+  // Fetch user skills from backend
+  useEffect(() => {
+    const fetchSkills = async () => {
+      if (!user) return;
+      
+      try {
+        setIsLoadingSkills(true);
+        const response = await apiClient.getMySkills();
+        
+        if (response.error) {
+          console.error('Error fetching skills:', response.error);
+          setSkills([]);
+        } else {
+          setSkills(response.data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching skills:', error);
+        setSkills([]);
+      } finally {
+        setIsLoadingSkills(false);
+      }
+    };
+
+    fetchSkills();
+  }, [user]);
+
+  const handleAddSkill = async (skillData: any) => {
+    try {
+      setIsCreatingSkill(true);
+      
+      const response = await apiClient.createSkill({
+        name: skillData.name,
+        type: skillData.type,
+        level: skillData.level
+      });
+      
+      if (response.error) {
+        console.error('Error creating skill:', response.error);
+        alert('Failed to create skill. Please try again.');
+        return;
+      }
+      
+      // Add the new skill to the local state
+      const newSkill: Skill = {
+        ...response.data,
+        description: skillData.description
+      };
+      setSkills([...skills, newSkill]);
+      setShowSkillForm(false);
+    } catch (error) {
+      console.error('Error creating skill:', error);
+      alert('Failed to create skill. Please try again.');
+    } finally {
+      setIsCreatingSkill(false);
+    }
   };
 
-  const handleEditSkill = (skillData: any) => {
+  const handleEditSkill = async (skillData: any) => {
+    // TODO: Implement edit skill API call
+    // For now, we'll just update the local state
     setSkills(skills.map(skill => 
-      skill.id === editingSkill.id ? { ...skill, ...skillData } : skill
+      skill.id === editingSkill?.id ? { ...skill, ...skillData } : skill
     ));
     setEditingSkill(null);
     setShowSkillForm(false);
   };
 
-  const handleDeleteSkill = (skillId: string) => {
+  const handleDeleteSkill = async (skillId: number) => {
+    // TODO: Implement delete skill API call
+    // For now, we'll just update the local state
     setSkills(skills.filter(skill => skill.id !== skillId));
+  };
+
+  const handleToggleProfileVisibility = async () => {
+    if (!user) return;
+    
+    try {
+      setIsUpdatingProfile(true);
+      
+      const newVisibility = !profileVisible;
+      const response = await apiClient.updateProfileVisibility(newVisibility);
+      
+      if (response.error) {
+        alert(`Failed to update profile visibility: ${response.error}`);
+      } else {
+        setProfileVisible(newVisibility);
+        alert(`Profile is now ${newVisibility ? 'public' : 'private'}`);
+      }
+      
+    } catch (error) {
+      console.error('Error updating profile visibility:', error);
+      alert('Failed to update profile visibility. Please try again.');
+    } finally {
+      setIsUpdatingProfile(false);
+    }
   };
 
   const offeredSkills = skills.filter(skill => skill.type === 'offered');
   const wantedSkills = skills.filter(skill => skill.type === 'wanted');
+
+  // Show loading state while user data is being fetched
+  if (isLoadingUser) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading your dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if no user data
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Not logged in</h2>
+            <p className="text-gray-600">Please log in to view your dashboard.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -85,23 +215,30 @@ const Dashboard = () => {
               <div className="flex items-start justify-between mb-4">
                 <h2 className="text-xl font-semibold text-gray-900">Profile</h2>
                 <button
-                  onClick={() => setProfileVisible(!profileVisible)}
+                  onClick={handleToggleProfileVisibility}
                   className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium ${
                     profileVisible 
                       ? 'bg-green-100 text-green-700' 
                       : 'bg-gray-100 text-gray-700'
                   }`}
+                  disabled={isUpdatingProfile}
                 >
-                  {profileVisible ? <Eye size={16} /> : <EyeOff size={16} />}
-                  <span>{profileVisible ? 'Public' : 'Private'}</span>
+                  {isUpdatingProfile ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mx-auto"></div>
+                  ) : (
+                    <>
+                      {profileVisible ? <Eye size={16} /> : <EyeOff size={16} />}
+                      <span>{profileVisible ? 'Public' : 'Private'}</span>
+                    </>
+                  )}
                 </button>
               </div>
 
               <div className="text-center mb-6">
                 <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  {user.photo ? (
+                  {user.photo_path ? (
                     <img 
-                      src={user.photo} 
+                      src={user.photo_path} 
                       alt={user.name}
                       className="w-20 h-20 rounded-full object-cover"
                     />
@@ -125,12 +262,16 @@ const Dashboard = () => {
                 <div className="text-center">
                   <div className="flex items-center justify-center space-x-1">
                     <Star size={16} className="text-yellow-500 fill-current" />
-                    <span className="text-lg font-semibold text-gray-900">{user.rating}</span>
+                    <span className="text-lg font-semibold text-gray-900">
+                      {isLoadingStats ? '...' : userStats.rating.toFixed(1)}
+                    </span>
                   </div>
                   <p className="text-sm text-gray-600">Rating</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-semibold text-gray-900">{user.totalSwaps}</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {isLoadingStats ? '...' : userStats.totalSwaps}
+                  </p>
                   <p className="text-sm text-gray-600">Swaps</p>
                 </div>
               </div>
@@ -142,7 +283,7 @@ const Dashboard = () => {
             </div>
 
             {/* SwapCoins */}
-            <CoinTracker coins={user.coins} showChart={true} />
+            <CoinTracker coins={userStats.coins} showChart={true} />
           </div>
 
           {/* Right Column - Skills */}
@@ -171,7 +312,12 @@ const Dashboard = () => {
                     </button>
                   </div>
 
-                  {offeredSkills.length === 0 ? (
+                  {isLoadingSkills ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+                      <p className="mt-2 text-gray-500">Loading skills...</p>
+                    </div>
+                  ) : offeredSkills.length === 0 ? (
                     <div className="text-center py-8">
                       <p className="text-gray-500">No skills offered yet</p>
                       <button
@@ -228,7 +374,12 @@ const Dashboard = () => {
                     </button>
                   </div>
 
-                  {wantedSkills.length === 0 ? (
+                  {isLoadingSkills ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                      <p className="mt-2 text-gray-500">Loading skills...</p>
+                    </div>
+                  ) : wantedSkills.length === 0 ? (
                     <div className="text-center py-8">
                       <p className="text-gray-500">No skills wanted yet</p>
                       <button

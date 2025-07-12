@@ -1,10 +1,33 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
-from app.models.skill import Skill
+from app.models import Skill, User
 from app.schemas.skill import SkillCreate, SkillResponse
-from app.api.v1.deps import get_db, get_current_user
+from app.core.security import decode_access_token
+from app.db.session import SessionLocal
 
 router = APIRouter()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def get_current_user(authorization: str = Header(None), db: Session = Depends(get_db)) -> User:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid token")
+    token = authorization.split(" ")[1]
+    payload = decode_access_token(token)
+    if payload is None or "email" not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials"
+        )
+    user = db.query(User).filter(User.email == payload["email"]).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 @router.post("/skills", response_model=SkillResponse)
 def create_skill(skill: SkillCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):

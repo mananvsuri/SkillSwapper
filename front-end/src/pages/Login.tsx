@@ -1,7 +1,9 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, CheckCircle, XCircle } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { validateEmail } from '@/lib/validation';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -10,34 +12,67 @@ const Login = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isLoading, setIsLoading] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  
+  const { login, loginError, isLoggingIn } = useAuth();
+
+  // Real-time validation
+  const validateField = (field: string, value: string) => {
+    const newErrors = { ...errors };
+    
+    switch (field) {
+      case 'email':
+        const emailResult = validateEmail(value);
+        if (!emailResult.isValid) {
+          newErrors.email = emailResult.message || 'Please enter a valid email address';
+        } else {
+          delete newErrors.email;
+        }
+        break;
+        
+      case 'password':
+        if (!value) {
+          newErrors.password = 'Password is required';
+        } else if (value.length < 1) {
+          newErrors.password = 'Password is required';
+        } else {
+          delete newErrors.password;
+        }
+        break;
+    }
+    
+    setErrors(newErrors);
+  };
+
+  const handleFieldChange = (field: string, value: string) => {
+    setFormData({ ...formData, [field]: value });
+    if (touched[field]) {
+      validateField(field, value);
+    }
+  };
+
+  const handleFieldBlur = (field: string) => {
+    setTouched({ ...touched, [field]: true });
+    validateField(field, formData[field as keyof typeof formData] as string);
+  };
 
   const validateForm = () => {
-    const newErrors: Record<string, string> = {};
+    const fields = ['email', 'password'];
+    fields.forEach(field => {
+      setTouched(prev => ({ ...prev, [field]: true }));
+      validateField(field, formData[field as keyof typeof formData] as string);
+    });
     
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email';
-    }
-    
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validateForm()) {
-      setIsLoading(true);
-      // Simulate API call
-      setTimeout(() => {
-        setIsLoading(false);
-        console.log('Login attempt:', formData);
-      }, 2000);
+      login({
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password
+      });
     }
   };
 
@@ -59,6 +94,12 @@ const Login = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-8">
+          {loginError && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              {loginError.message || 'Login failed. Please check your credentials and try again.'}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
@@ -70,12 +111,20 @@ const Login = () => {
                   type="email"
                   id="email"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => handleFieldChange('email', e.target.value)}
+                  onBlur={() => handleFieldBlur('email')}
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.email ? 'border-red-300' : 'border-gray-300'
+                    errors.email ? 'border-red-300' : touched.email && !errors.email ? 'border-green-300' : 'border-gray-300'
                   }`}
                   placeholder="Enter your email"
+                  autoComplete="email"
                 />
+                {touched.email && !errors.email && (
+                  <CheckCircle size={20} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" />
+                )}
+                {errors.email && (
+                  <XCircle size={20} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-red-500" />
+                )}
               </div>
               {errors.email && (
                 <p className="mt-1 text-sm text-red-600">{errors.email}</p>
@@ -92,11 +141,13 @@ const Login = () => {
                   type={showPassword ? 'text' : 'password'}
                   id="password"
                   value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  onChange={(e) => handleFieldChange('password', e.target.value)}
+                  onBlur={() => handleFieldBlur('password')}
                   className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.password ? 'border-red-300' : 'border-gray-300'
+                    errors.password ? 'border-red-300' : touched.password && !errors.password ? 'border-green-300' : 'border-gray-300'
                   }`}
                   placeholder="Enter your password"
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
@@ -129,10 +180,10 @@ const Login = () => {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoggingIn || Object.keys(errors).length > 0}
               className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {isLoggingIn ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 

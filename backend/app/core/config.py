@@ -11,7 +11,7 @@ class Settings:
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 day
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/skillswap"
+        "sqlite:///./skillswap.db"
     )
 
 settings = Settings()

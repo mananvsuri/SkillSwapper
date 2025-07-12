@@ -1,8 +1,8 @@
 from app.db.session import engine
-from app.models import base, user, skill, swap, rating, swapcoin
+from app.models import Base
 
 def init_db():
-    base.Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
 
 # Optionally seed data:
 # def seed_data():

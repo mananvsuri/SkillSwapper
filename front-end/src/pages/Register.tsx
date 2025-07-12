@@ -1,7 +1,18 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, User, MapPin, Upload } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, MapPin, Upload, CheckCircle, XCircle } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { 
+  validateEmail, 
+  validateName, 
+  validatePassword, 
+  validateConfirmPassword, 
+  validateLocation, 
+  validateFile,
+  getPasswordStrength,
+  type PasswordStrength 
+} from '@/lib/validation';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -15,55 +26,93 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isLoading, setIsLoading] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  
+  const { register, registerError, isRegistering } = useAuth();
+
+  // Validation rules
+  const validationRules = {
+    name: validateName,
+    email: validateEmail,
+    password: validatePassword,
+    location: validateLocation,
+    profilePhoto: validateFile
+  };
+
+  // Real-time validation
+  const validateField = (field: string, value: any) => {
+    const newErrors = { ...errors };
+    
+    if (field === 'confirmPassword') {
+      const result = validateConfirmPassword(formData.password, value);
+      if (!result.isValid) {
+        newErrors.confirmPassword = result.message || 'Passwords do not match';
+      } else {
+        delete newErrors.confirmPassword;
+      }
+    } else if (validationRules[field as keyof typeof validationRules]) {
+      const result = validationRules[field as keyof typeof validationRules](value);
+      if (!result.isValid) {
+        newErrors[field] = result.message || `${field} is invalid`;
+      } else {
+        delete newErrors[field];
+      }
+    }
+    
+    setErrors(newErrors);
+  };
+
+  const handleFieldChange = (field: string, value: any) => {
+    setFormData({ ...formData, [field]: value });
+    if (touched[field]) {
+      validateField(field, value);
+    }
+  };
+
+  const handleFieldBlur = (field: string) => {
+    setTouched({ ...touched, [field]: true });
+    validateField(field, formData[field as keyof typeof formData]);
+  };
 
   const validateForm = () => {
-    const newErrors: Record<string, string> = {};
+    const fields = ['name', 'email', 'password', 'confirmPassword'];
+    fields.forEach(field => {
+      setTouched(prev => ({ ...prev, [field]: true }));
+      validateField(field, formData[field as keyof typeof formData]);
+    });
     
-    if (!formData.name.trim()) {
-      newErrors.name = 'Name is required';
-    } else if (formData.name.length < 2) {
-      newErrors.name = 'Name must be at least 2 characters';
-    }
-    
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email';
-    }
-    
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
-    
-    if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return Object.keys(errors).length === 0;
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFormData({ ...formData, profilePhoto: file });
+    const file = e.target.files?.[0] || null;
+    const result = validateFile(file);
+    
+    if (!result.isValid) {
+      setErrors(prev => ({ ...prev, profilePhoto: result.message }));
+      return;
     }
+    
+    setFormData({ ...formData, profilePhoto: file });
+    setErrors(prev => ({ ...prev, profilePhoto: '' }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validateForm()) {
-      setIsLoading(true);
-      // Simulate API call
-      setTimeout(() => {
-        setIsLoading(false);
-        console.log('Registration attempt:', formData);
-      }, 2000);
+      const registerData = {
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+        location: formData.location.trim() || undefined,
+        photo_path: formData.profilePhoto ? formData.profilePhoto.name : undefined,
+        is_public: true,
+      };
+      register(registerData);
     }
   };
+
+  const passwordStrength: PasswordStrength = getPasswordStrength(formData.password);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -83,6 +132,12 @@ const Register = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-8">
+          {registerError && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              {registerError.message || 'Registration failed. Please try again.'}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -94,12 +149,19 @@ const Register = () => {
                   type="text"
                   id="name"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => handleFieldChange('name', e.target.value)}
+                  onBlur={() => handleFieldBlur('name')}
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.name ? 'border-red-300' : 'border-gray-300'
+                    errors.name ? 'border-red-300' : touched.name && !errors.name ? 'border-green-300' : 'border-gray-300'
                   }`}
                   placeholder="Enter your full name"
                 />
+                {touched.name && !errors.name && (
+                  <CheckCircle size={20} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" />
+                )}
+                {errors.name && (
+                  <XCircle size={20} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-red-500" />
+                )}
               </div>
               {errors.name && (
                 <p className="mt-1 text-sm text-red-600">{errors.name}</p>
@@ -116,12 +178,19 @@ const Register = () => {
                   type="email"
                   id="email"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => handleFieldChange('email', e.target.value)}
+                  onBlur={() => handleFieldBlur('email')}
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.email ? 'border-red-300' : 'border-gray-300'
+                    errors.email ? 'border-red-300' : touched.email && !errors.email ? 'border-green-300' : 'border-gray-300'
                   }`}
                   placeholder="Enter your email"
                 />
+                {touched.email && !errors.email && (
+                  <CheckCircle size={20} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" />
+                )}
+                {errors.email && (
+                  <XCircle size={20} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-red-500" />
+                )}
               </div>
               {errors.email && (
                 <p className="mt-1 text-sm text-red-600">{errors.email}</p>
@@ -138,9 +207,10 @@ const Register = () => {
                   type={showPassword ? 'text' : 'password'}
                   id="password"
                   value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  onChange={(e) => handleFieldChange('password', e.target.value)}
+                  onBlur={() => handleFieldBlur('password')}
                   className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.password ? 'border-red-300' : 'border-gray-300'
+                    errors.password ? 'border-red-300' : touched.password && !errors.password ? 'border-green-300' : 'border-gray-300'
                   }`}
                   placeholder="Create a password"
                 />
@@ -155,6 +225,52 @@ const Register = () => {
               {errors.password && (
                 <p className="mt-1 text-sm text-red-600">{errors.password}</p>
               )}
+              
+              {/* Password strength indicator */}
+              {formData.password && (
+                <div className="mt-2">
+                  <div className="flex space-x-1 mb-2">
+                    {[1, 2, 3, 4, 5].map((level) => (
+                      <div
+                        key={level}
+                        className={`h-1 flex-1 rounded ${
+                          level <= passwordStrength.score
+                            ? passwordStrength.score <= 2
+                              ? 'bg-red-500'
+                              : passwordStrength.score <= 3
+                              ? 'bg-yellow-500'
+                              : 'bg-green-500'
+                            : 'bg-gray-200'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    <div className="grid grid-cols-2 gap-1">
+                      <div className={`flex items-center space-x-1 ${passwordStrength.checks.length ? 'text-green-600' : 'text-gray-400'}`}>
+                        <CheckCircle size={12} />
+                        <span>At least 8 characters</span>
+                      </div>
+                      <div className={`flex items-center space-x-1 ${passwordStrength.checks.lowercase ? 'text-green-600' : 'text-gray-400'}`}>
+                        <CheckCircle size={12} />
+                        <span>Lowercase letter</span>
+                      </div>
+                      <div className={`flex items-center space-x-1 ${passwordStrength.checks.uppercase ? 'text-green-600' : 'text-gray-400'}`}>
+                        <CheckCircle size={12} />
+                        <span>Uppercase letter</span>
+                      </div>
+                      <div className={`flex items-center space-x-1 ${passwordStrength.checks.number ? 'text-green-600' : 'text-gray-400'}`}>
+                        <CheckCircle size={12} />
+                        <span>Number</span>
+                      </div>
+                      <div className={`flex items-center space-x-1 ${passwordStrength.checks.special ? 'text-green-600' : 'text-gray-400'}`}>
+                        <CheckCircle size={12} />
+                        <span>Special character</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -167,9 +283,10 @@ const Register = () => {
                   type={showConfirmPassword ? 'text' : 'password'}
                   id="confirmPassword"
                   value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  onChange={(e) => handleFieldChange('confirmPassword', e.target.value)}
+                  onBlur={() => handleFieldBlur('confirmPassword')}
                   className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                    errors.confirmPassword ? 'border-red-300' : touched.confirmPassword && !errors.confirmPassword ? 'border-green-300' : 'border-gray-300'
                   }`}
                   placeholder="Confirm your password"
                 />
@@ -196,11 +313,17 @@ const Register = () => {
                   type="text"
                   id="location"
                   value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  onChange={(e) => handleFieldChange('location', e.target.value)}
+                  onBlur={() => handleFieldBlur('location')}
+                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.location ? 'border-red-300' : 'border-gray-300'
+                  }`}
                   placeholder="Enter your city or area"
                 />
               </div>
+              {errors.location && (
+                <p className="mt-1 text-sm text-red-600">{errors.location}</p>
+              )}
             </div>
 
             <div>
@@ -230,14 +353,17 @@ const Register = () => {
                   />
                 </label>
               </div>
+              {errors.profilePhoto && (
+                <p className="mt-1 text-sm text-red-600">{errors.profilePhoto}</p>
+              )}
             </div>
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isRegistering || Object.keys(errors).length > 0}
               className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Creating Account...' : 'Create Account'}
+              {isRegistering ? 'Creating Account...' : 'Create Account'}
             </button>
           </form>
 
