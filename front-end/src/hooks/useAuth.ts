@@ -34,13 +34,41 @@ export const useAuth = () => {
 
   // Login mutation
   const loginMutation = useMutation({
-    mutationFn: (credentials: LoginCredentials) => apiClient.login(credentials),
+    mutationFn: async (credentials: LoginCredentials) => {
+      const response = await apiClient.login(credentials);
+      
+      // Handle different error scenarios
+      if (response.error) {
+        let errorMessage = response.error;
+        
+        // Provide more specific error messages
+        if (response.error.includes('401') || response.error.includes('Unauthorized')) {
+          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+        } else if (response.error.includes('403') || response.error.includes('Forbidden')) {
+          errorMessage = 'Your account has been banned. Please contact support for assistance.';
+        } else if (response.error.includes('422') || response.error.includes('Validation')) {
+          errorMessage = 'Please check your email and password format.';
+        } else if (response.error.includes('500') || response.error.includes('Internal')) {
+          errorMessage = 'Server error. Please try again later.';
+        } else if (response.error.includes('Network')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      return response;
+    },
     onSuccess: (response: ApiResponse<{ access_token: string; token_type: string }>) => {
       if (response.data) {
         localStorage.setItem('token', response.data.access_token);
         queryClient.invalidateQueries({ queryKey: ['user'] });
         navigate('/dashboard');
       }
+    },
+    onError: (error: Error) => {
+      // Error is already handled in mutationFn, but we can add additional logging here
+      console.error('Login error:', error.message);
     },
   });
 

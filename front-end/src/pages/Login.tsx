@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, CheckCircle, XCircle } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { validateEmail } from '@/lib/validation';
+import { toast } from 'sonner';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -15,6 +16,26 @@ const Login = () => {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   
   const { login, loginError, isLoggingIn } = useAuth();
+
+  // Show error toast when login fails
+  useEffect(() => {
+    if (loginError) {
+      const errorMessage = loginError.message || 'Login failed. Please check your credentials and try again.';
+      toast.error('Login Failed', {
+        description: errorMessage,
+        duration: 5000,
+        action: {
+          label: 'Try Again',
+          onClick: () => {
+            // Clear the error and allow retry
+            setFormData({ email: '', password: '' });
+            setErrors({});
+            setTouched({});
+          },
+        },
+      });
+    }
+  }, [loginError]);
 
   // Real-time validation
   const validateField = (field: string, value: string) => {
@@ -68,10 +89,24 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Clear any previous errors
+    setErrors({});
+    
     if (validateForm()) {
-      login({
-        email: formData.email.trim().toLowerCase(),
-        password: formData.password
+      try {
+        await login({
+          email: formData.email.trim().toLowerCase(),
+          password: formData.password
+        });
+      } catch (error) {
+        // This will be handled by the useEffect above
+        console.error('Login error:', error);
+      }
+    } else {
+      toast.error('Please fix the errors before submitting', {
+        description: 'Please check all fields and try again.',
+        duration: 3000,
       });
     }
   };
@@ -95,8 +130,16 @@ const Login = () => {
 
         <div className="bg-white rounded-lg shadow-lg p-8">
           {loginError && (
-            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-              {loginError.message || 'Login failed. Please check your credentials and try again.'}
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center">
+                <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+                <div>
+                  <h3 className="text-sm font-medium text-red-800">Login Failed</h3>
+                  <p className="text-sm text-red-700 mt-1">
+                    {loginError.message || 'Please check your credentials and try again.'}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
