@@ -71,7 +71,7 @@ DiamondsOdoo is a comprehensive skill swap platform that enables users to exchan
 
 ### 1. Clone the Repository
 ```bash
-git clone <repository-url>
+git clone <https://github.com/mananvsuri/DiamondsOdoo.git>
 cd DiamondsOdoo
 ```
 
